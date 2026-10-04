@@ -7,13 +7,16 @@ import LeadLagView from './components/LeadLagView';
 import MethodologyPanel from './components/MethodologyPanel';
 import ClaimsView from './components/ClaimsView';
 import EmbedView from './components/EmbedView';
+import LongRunView, { LongRunEmbed, isLongRunPanel } from './components/LongRunView';
+import type { LongRunPanel } from './lib/longrun';
 import { SampleSelector, SeriesSelector } from './components/Selectors';
 
-type Route = 'visualizations' | 'facts' | 'moments' | 'leadlag' | 'methodology' | 'embed';
+type Route = 'visualizations' | 'facts' | 'longrun' | 'moments' | 'leadlag' | 'methodology' | 'embed';
 
 const ROUTES: { id: Route; label: string }[] = [
   { id: 'visualizations', label: 'Visualizations' },
   { id: 'facts', label: 'Stylized Facts' },
+  { id: 'longrun', label: 'Long Run' },
   { id: 'moments', label: 'Moments Table' },
   { id: 'leadlag', label: 'Lead / Lag Dynamics' },
   { id: 'methodology', label: 'Methodology & Provenance' },
@@ -22,7 +25,8 @@ const ROUTES: { id: Route; label: string }[] = [
 interface RouteInfo {
   route: Route;
   isEmbed: boolean;
-  embedType?: 'claim' | 'explore';
+  embedType?: 'claim' | 'explore' | 'longrun';
+  panel?: LongRunPanel;
   claimId?: string;
   seriesId?: SeriesId;
   sampleId?: SampleId;
@@ -39,6 +43,9 @@ function parseHashLocation(): RouteInfo {
   if (path.startsWith('embed')) {
     const parts = path.split('/');
     // parts[0] is 'embed'
+    if (parts[1] === 'longrun') {
+      return { route: 'embed', isEmbed: true, embedType: 'longrun', panel: isLongRunPanel(parts[2]) ? parts[2] : 'great-ratios' };
+    }
     if (parts[1] === 'claim') {
       const claimId = parts[2] || 'consumption-smoother';
       return {
@@ -70,9 +77,11 @@ function parseHashLocation(): RouteInfo {
   }
 
   const matched = ROUTES.find((r) => r.id === path);
+  const panelParam = params.get('panel');
   return {
     route: (matched?.id ?? 'visualizations') as Route,
     isEmbed: false,
+    panel: isLongRunPanel(panelParam) ? panelParam : undefined,
   };
 }
 
@@ -160,12 +169,19 @@ export default function App() {
   }
 
   // --- EMBED MODE (No Masthead, No Shell, No Navigation Tabs) ---
+  if (routeInfo.isEmbed && routeInfo.embedType === 'longrun') {
+    return (
+      <div className="embed-root">
+        <LongRunEmbed artifact={artifact} panel={routeInfo.panel ?? 'great-ratios'} />
+      </div>
+    );
+  }
   if (routeInfo.isEmbed) {
     return (
       <div className="embed-root">
         <EmbedView
           artifact={artifact}
-          embedType={routeInfo.embedType || 'claim'}
+          embedType={routeInfo.embedType === 'explore' ? 'explore' : 'claim'}
           claimId={routeInfo.claimId}
           initialSeries={routeInfo.seriesId}
           initialSample={routeInfo.sampleId}
@@ -249,6 +265,8 @@ export default function App() {
             />
           </section>
         )}
+
+        {route === 'longrun' && <LongRunView key={routeInfo.panel ?? 'default'} artifact={artifact} panel={routeInfo.panel} />}
 
         {/* Route 3: Moments Table */}
         {route === 'moments' && (

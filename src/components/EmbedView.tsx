@@ -144,7 +144,7 @@ export default function EmbedView({
             rel="noopener noreferrer"
             className="embed-open-link"
           >
-            Open full interactive explorer ↗
+            Open full analysis ↗
           </a>
         </footer>
       </div>
@@ -281,7 +281,7 @@ export default function EmbedView({
           rel="noopener noreferrer"
           className="embed-open-link"
         >
-          Open full interactive explorer ↗
+          Open full analysis ↗
         </a>
       </footer>
     </div>
