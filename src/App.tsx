@@ -185,23 +185,12 @@ export default function App() {
       <header className="masthead">
         <div className="masthead-top">
           <div>
-            <h1>What the U.S. Business Cycle Actually Looks Like</h1>
+            <h1>What the U.S. Business Cycle Looks Like</h1>
             <p className="subtitle">
-              An interactive companion to the U.S. business-cycle facts study. All statistics, HP
-              filter trends, and moments are derived from the <code>us-business-cycles-v1</code> publication artifact.
+              An interactive look at U.S. Business Cycle facts
             </p>
           </div>
-          <div className="badge-stack">
-            <span className="badge">Standalone Static · No Backend</span>
-            <span className="badge">{artifact.canonical_sample.name}</span>
-            <span className="badge">HP Filter &lambda; = {artifact.hp_filter.lambda}</span>
-          </div>
         </div>
-
-        <aside className="disclaimer" role="note">
-          <strong>Educational / technical study artifact — not original research.</strong> This is a
-          pedagogical and replication exercise built on public data (BEA, BLS, FRED, and Fernald). It makes no new empirical claim, reports no statistical inference, and should not be cited as a research result. Redistribution clearance for originating providers is unverified.
-        </aside>
 
         {/* Navigation Tabs */}
         <nav className="tabs" aria-label="Sections">
