@@ -88,7 +88,7 @@ export default function EmbedView({
         {/* Header: Title + Sample Selector */}
         <header className="embed-header">
           <div className="embed-title-block">
-            <h2 className="embed-title">{claim.id === 'factor-prices' ? 'Real wages fluctuate less than hours.' : claim.claim}</h2>
+            <h2 className="embed-title">{claim.claim}</h2>
             <div className="embed-stat-badge">
               <span className="embed-stat-label">{evidence.stat}:</span>{' '}
               <strong className="embed-stat-val">{evidence.value}</strong>
@@ -112,9 +112,6 @@ export default function EmbedView({
 
         {/* Dynamic Empirical Finding Callout */}
         <p className="embed-finding">
-          <span className={`verdict ${evidence.holds ? 'ok' : 'no'}`}>
-            {evidence.holds ? 'supported' : 'not supported'}
-          </span>{' '}
           {evidence.verdict}
         </p>
 
@@ -138,6 +135,7 @@ export default function EmbedView({
         {/* Footer: Caveat + Standalone Link */}
         <footer className="embed-footer">
           {claim.caveat && <span className="embed-caveat">{claim.caveat}</span>}
+          <span className="embed-caveat">HP endpoint note: two-sided estimates are sensitive at sample endpoints; latest observations can change with new data; this is not a recession chronology.</span>
           <a
             href={fullAppUrl}
             target="_blank"
@@ -273,7 +271,7 @@ export default function EmbedView({
       {/* Footer */}
       <footer className="embed-footer">
         <span className="embed-caveat">
-          HP filter &lambda; = 1600 · Source: BEA, BLS, FRED, Fernald.
+          HP filter &lambda; = 1600 · Source: BEA, BLS, FRED, Fernald. Two-sided estimates are sensitive at sample endpoints; latest observations can change with new data; this is not a recession chronology.
         </span>
         <a
           href={fullAppUrl}

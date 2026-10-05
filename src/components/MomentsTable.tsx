@@ -104,7 +104,8 @@ export default function MomentsTable({
       <p className="footnote">
         † The real rate is in quarterly decimal-rate units. Its standard deviation and relative
         volatility are not comparable with logged quantities; read its correlation column, not its
-        SD ratio.
+        SD ratio. Its correlations are provisional because the Treasury input’s original
+        monthly-to-quarterly convention is unverified; see Methodology &amp; Provenance.
       </p>
       <p className="footnote">{artifact.moments_definition}</p>
     </div>

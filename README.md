@@ -44,7 +44,12 @@ under a GitHub Pages project path, or in any subdirectory. Deploy by publishing 
 static host (Netlify, Cloudflare Pages, GitHub Pages, S3). No server configuration is required
 beyond serving `.json` with the usual content type.
 
-Routing is hash-based (`#/facts`, `#/visualizations`, …), so no SPA rewrite rules are needed.
+Routing is hash-based (`#/overview`, `#/facts`, `#/visualizations`, …), so no SPA rewrite rules are needed.
+The default `Start Here` view shows three sample-dependent descriptive findings and a cycle
+comparison in approximate percentage deviations (100 × log cycles). Detailed views and all
+existing embed URLs remain available. Real-rate findings are provisional until the Treasury
+input's upstream monthly-to-quarterly convention is verified; reproducibility does not establish
+that convention. No published observations or moments were changed for this presentation update.
 
 ## Cloudflare Pages deployment (prepared, not deployed)
 

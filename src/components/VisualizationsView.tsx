@@ -272,6 +272,13 @@ export default function VisualizationsView({
         );
       })()}
 
+      <p className="footnote">
+        HP trends and cycles are sensitive to the sample window, especially near endpoints. Recent deviations can change as new observations arrive. These estimates are not a recession chronology or a causal decomposition.
+      </p>
+      {(selectedSeries === 'real_rate' || (mode === 'compare_cycles' && compareList.includes('real_rate'))) && (
+        <p className="callout warn">Real-rate results are provisional: the Treasury input’s original monthly-to-quarterly convention is unverified. The ex-post rate uses realized next-quarter GDP-deflator inflation. See Methodology &amp; Provenance for the exact construction.</p>
+      )}
+
       {/* Relevant Moments for the selected series */}
       <MomentsTable
         artifact={artifact}

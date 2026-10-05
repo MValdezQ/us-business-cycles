@@ -77,6 +77,25 @@ export default function MethodologyPanel({ artifact }: { artifact: Artifact }) {
       </div>
 
       <div className="panel">
+        <h3>How to interpret HP-filtered cycles</h3>
+        <p>The HP filter is a descriptive way to separate a smooth trend from shorter-run movements, not a model of potential output or a causal decomposition. Its two-sided trend uses observations before and after each date.</p>
+        <p>Near sample endpoints, especially the latest quarters, the estimated trend and cycle are particularly sensitive to the available observations. Adding new data can change past estimates even if the underlying observations are unchanged. Read recent deviations cautiously.</p>
+        <p>Results also depend on the smoothing parameter and sample window. An HP-filtered cycle is not an official recession chronology, and these comparisons do not provide statistical tests.</p>
+      </div>
+
+      <div className="panel">
+        <h3>Constructed consumption measure</h3>
+        <p>Consumption is nominal personal consumption expenditures on nondurables plus services (PCND + PCESV), deflated using the GDP deflator (GDPDEF / 100), then divided by civilian noninstitutional population age 16+. It is not the official BEA real-consumption series. Consumer durables are included in investment instead.</p>
+      </div>
+
+      <div className="panel">
+        <h3>Real interest rate: reproducible calculation, unresolved input convention</h3>
+        <p className="callout warn">The Treasury input contains quarter-start observations, but its original monthly-to-quarterly convention is unverified. Real-rate correlations remain conditional on that input; they should not be read as a fully verified measurement result.</p>
+        <p>The implemented rate at quarter t is TB3MS(t) / 400 minus [ln GDPDEF(t+1) − ln GDPDEF(t)]. The nominal annualized percent rate is converted to a quarterly decimal and compared with realized next-quarter inflation. This is an ex-post measure, not an expected real rate.</p>
+        <p>The pipeline performs no monthly aggregation. Quarter-start dates do not identify whether the values were averages or selected months. Verifying that choice requires the original monthly observations or download metadata; numerical reproducibility alone does not resolve it.</p>
+      </div>
+
+      <div className="panel">
         <h3>Series definitions and transformations</h3>
         <div className="table-scroll">
           <table className="moments compact">

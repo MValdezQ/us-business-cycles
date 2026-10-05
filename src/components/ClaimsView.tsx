@@ -6,14 +6,14 @@ export interface Claim {
   claim: string;
   focus: SeriesId[];
   statLabel: string;
-  evidence: (m: Record<SeriesId, Moment>) => { stat: string; value: string; verdict: string; holds: boolean | null };
+  evidence: (m: Record<SeriesId, Moment>) => { stat: string; value: string; verdict: string };
   caveat?: string;
 }
 
 export const CLAIMS: Claim[] = [
   {
     id: 'consumption-smoother',
-    claim: 'Consumption is smoother than output.',
+    claim: "Consumption's cyclical volatility relative to output",
     focus: ['log_C_pc', 'log_Y_pc'],
     statLabel: 'SD(C cycle) / SD(Y cycle)',
     evidence: (m) => {
@@ -21,19 +21,15 @@ export const CLAIMS: Claim[] = [
       return {
         stat: 'SD(C cycle) / SD(Y cycle)',
         value: fmt(r, 2),
-        verdict:
-          r < 1
-            ? `Holds: the consumption cycle is ${fmt(r, 2)}x as volatile as the output cycle, about ${Math.round((1 - r) * 100)}% smoother`
-            : 'Does not hold in this sample',
-        holds: r < 1,
+        verdict: `In this sample, the consumption cycle's standard deviation is ${fmt(r, 2)} times the output cycle's, so it fluctuates ${r < 1 ? 'less' : r > 1 ? 'more' : 'as much'} than output.`,
       };
     },
     caveat:
-      'Consumption here is nondurables plus services, not total PCE. Durables are grouped with investment, which is what makes the smoothness result as sharp as it is.',
+      'This is constructed nominal nondurables plus services deflated with the GDP deflator, not official BEA real consumption. Durables are grouped with investment; this construction does not by itself establish that the exclusions cause the observed difference.',
   },
   {
     id: 'investment-volatile',
-    claim: 'Investment is much more volatile than output.',
+    claim: "Investment's cyclical volatility relative to output",
     focus: ['log_I_pc', 'log_Y_pc'],
     statLabel: 'SD(I cycle) / SD(Y cycle)',
     evidence: (m) => {
@@ -41,15 +37,14 @@ export const CLAIMS: Claim[] = [
       return {
         stat: 'SD(I cycle) / SD(Y cycle)',
         value: fmt(r, 2),
-        verdict: r > 2 ? `Holds: investment is about ${fmt(r, 1)}x as volatile as output` : r > 1 ? 'Partly: more volatile, but less than twice' : 'Does not hold in this sample',
-        holds: r > 2,
+        verdict: `In this sample, the investment cycle's standard deviation is ${fmt(r, 2)} times the output cycle's.`,
       };
     },
     caveat: 'Investment is fixed investment plus consumer durables, so it is broader than NIPA fixed investment alone.',
   },
   {
     id: 'hours-cyclical',
-    claim: 'Hours are highly cyclical.',
+    claim: "Hours' comovement and volatility relative to output",
     focus: ['log_hours_pc', 'log_Y_pc'],
     statLabel: 'Corr(hours, Y) · Relative SD',
     evidence: (m) => {
@@ -58,18 +53,14 @@ export const CLAIMS: Claim[] = [
       return {
         stat: 'Corr(hours, Y) and SD ratio',
         value: `${fmt(c, 2)} · ${fmt(r, 2)}`,
-        verdict:
-          c > 0.7
-            ? `Holds: strongly procyclical (corr ${fmt(c, 2)}) and nearly as volatile as output (${fmt(r, 2)}x)`
-            : 'Weaker than claimed in this sample',
-        holds: c > 0.7,
+        verdict: `In this sample, hours have a ${fmt(c, 2)} correlation with output and a cyclical standard deviation ${fmt(r, 2)} times output's.`,
       };
     },
     caveat: 'Hours is a normalized index per capita, not hours per person.',
   },
   {
     id: 'factor-prices',
-    claim: 'Factor prices move less than quantities.',
+    claim: 'Real compensation and hours',
     focus: ['log_wage', 'log_productivity', 'log_hours_pc', 'log_I_pc'],
     statLabel: 'SD(wage)/SD(Y) vs SD(hours)/SD(Y)',
     evidence: (m) => {
@@ -78,19 +69,15 @@ export const CLAIMS: Claim[] = [
       return {
         stat: 'SD(wage)/SD(Y) vs SD(hours)/SD(Y)',
         value: `${fmt(w, 2)} vs ${fmt(h, 2)}`,
-        verdict:
-          w < h
-            ? `Holds: the wage moves ${fmt(h / w, 1)}x less than hours relative to output`
-            : 'Does not hold in this sample',
-        holds: w < h,
+        verdict: `Real compensation fluctuates ${w < h ? 'less' : w > h ? 'more' : 'as much'} than hours in this sample: its cyclical standard deviation relative to output is ${fmt(w, 2)}, versus ${fmt(h, 2)} for hours.`,
       };
     },
     caveat:
-      'The wage is a compensation index, not a dollar wage, and is measured for the nonfarm business sector. Composition effects over the cycle are not removed.',
+      'The measure is a compensation index, not a dollar wage, and is measured for the nonfarm business sector. Composition effects over the cycle are not removed.',
   },
   {
     id: 'real-rate-weak',
-    claim: 'Real rates are only weakly correlated with output.',
+    claim: "Real rate's comovement with output",
     focus: ['real_rate', 'log_Y_pc'],
     statLabel: 'Corr(real rate, Y)',
     evidence: (m) => {
@@ -98,15 +85,11 @@ export const CLAIMS: Claim[] = [
       return {
         stat: 'Corr(real rate, Y)',
         value: fmt(c, 2),
-        verdict:
-          Math.abs(c) < 0.3
-            ? `Holds: contemporaneous correlation is only ${fmt(c, 2)}`
-            : `Stronger than "weak" here: ${fmt(c, 2)}`,
-        holds: Math.abs(c) < 0.3,
+        verdict: `In this sample, the real rate's contemporaneous correlation with output is ${fmt(c, 2)}.`,
       };
     },
     caveat:
-      'The real rate is an ex-post 3-month bill rate less realized deflator inflation, in quarterly decimal units. Its SD ratio is not comparable to logged quantities, and the underlying TB3MS aggregation convention is undocumented.',
+      'This is a provisional measurement using a quarterly Treasury input whose original aggregation has not been verified, minus realized next-quarter GDP-deflator inflation. It is not a new empirical result.',
   },
 ];
 
@@ -131,9 +114,6 @@ export default function ClaimsView({
           <article className="claim-card" key={c.id}>
             <header>
               <h3>{c.claim}</h3>
-              <span className={`verdict ${e.holds === true ? 'ok' : e.holds === false ? 'no' : 'na'}`}>
-                {e.holds === true ? 'supported' : e.holds === false ? 'not supported' : 'see data'}
-              </span>
             </header>
             <p className="stat-line">
               <span className="stat-name">{e.stat}</span>
@@ -147,12 +127,7 @@ export default function ClaimsView({
           </article>
         );
       })}
-      <p className="footnote wide">
-        Verdicts are mechanical readings of the artifact's moments for the selected sample
-        ({artifact.sample_definitions[sampleId].name}). They are thresholds chosen for exposition,
-        not statistical tests: no standard errors, and no inference about whether a difference is
-        significant.
-      </p>
+      <p className="footnote wide">These are descriptive comparisons for the selected sample, not statistical tests. No standard errors or significance claims are provided.</p>
     </div>
   );
 }

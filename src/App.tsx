@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { loadArtifact } from './lib/artifact';
+import { getCycleSlice, loadArtifact } from './lib/artifact';
+import { fmt, quarterLabel } from './lib/format';
+import TimeSeriesChart from './components/TimeSeriesChart';
 import { SAMPLE_IDS, SERIES_IDS, type Artifact, type SampleId, type SeriesId } from './lib/artifact-types';
 import VisualizationsView from './components/VisualizationsView';
 import MomentsTable from './components/MomentsTable';
@@ -11,9 +13,10 @@ import LongRunView, { LongRunEmbed, isLongRunPanel } from './components/LongRunV
 import type { LongRunPanel } from './lib/longrun';
 import { SampleSelector, SeriesSelector } from './components/Selectors';
 
-type Route = 'visualizations' | 'facts' | 'longrun' | 'moments' | 'leadlag' | 'methodology' | 'embed';
+type Route = 'overview' | 'visualizations' | 'facts' | 'longrun' | 'moments' | 'leadlag' | 'methodology' | 'embed';
 
 const ROUTES: { id: Route; label: string }[] = [
+  { id: 'overview', label: 'Start Here' },
   { id: 'visualizations', label: 'Visualizations' },
   { id: 'facts', label: 'Stylized Facts' },
   { id: 'longrun', label: 'Long Run' },
@@ -79,7 +82,7 @@ function parseHashLocation(): RouteInfo {
   const matched = ROUTES.find((r) => r.id === path);
   const panelParam = params.get('panel');
   return {
-    route: (matched?.id ?? 'visualizations') as Route,
+    route: (matched?.id ?? 'overview') as Route,
     isEmbed: false,
     panel: isLongRunPanel(panelParam) ? panelParam : undefined,
   };
@@ -194,6 +197,11 @@ export default function App() {
 
   // --- STANDALONE FULL PRODUCT MODE ---
   const route = routeInfo.route;
+  const sample = artifact.sample_definitions[sampleId];
+  const moments = artifact.sample_results[sampleId].moments;
+  const consumption = moments.find((m) => m.series_id === 'log_C_pc')!;
+  const investment = moments.find((m) => m.series_id === 'log_I_pc')!;
+  const hours = moments.find((m) => m.series_id === 'log_hours_pc')!;
 
   return (
     <div className="app">
@@ -226,7 +234,51 @@ export default function App() {
 
       {/* Main Views */}
       <main>
-        {/* Route 1: Visualizations (Flagship default) */}
+        {route === 'overview' && (
+          <section className="stack">
+            <div className="panel">
+              <h2>Three patterns in the U.S. business cycle</h2>
+              <p>Start with how spending and hours move around their trends. Change the sample to see how the patterns differ across periods.</p>
+              <SampleSelector artifact={artifact} value={sampleId} onChange={setSampleId} />
+            </div>
+            <div className="claims">
+              <article className="claim-card">
+                <h3>Consumption and output</h3>
+                <p className="stat-line"><span className="stat-name">Relative cyclical volatility</span><strong className="stat-value">{fmt(consumption.rel_std_dev, 2)}×</strong></p>
+                <p>Consumption fluctuates {consumption.rel_std_dev < 1 ? 'less' : consumption.rel_std_dev > 1 ? 'more' : 'as much'} than output in this sample. Its cyclical standard deviation is {fmt(consumption.rel_std_dev, 2)} times output’s.</p>
+              </article>
+              <article className="claim-card">
+                <h3>Investment and output</h3>
+                <p className="stat-line"><span className="stat-name">Relative cyclical volatility</span><strong className="stat-value">{fmt(investment.rel_std_dev, 2)}×</strong></p>
+                <p>Investment fluctuates {investment.rel_std_dev > 1 ? 'more' : investment.rel_std_dev < 1 ? 'less' : 'as much'} than output in this sample. Its cyclical standard deviation is {fmt(investment.rel_std_dev, 2)} times output’s.</p>
+              </article>
+              <article className="claim-card">
+                <h3>Hours and output</h3>
+                <p className="stat-line"><span className="stat-name">Correlation of cyclical deviations</span><strong className="stat-value">{fmt(hours.corr_y, 2)}</strong></p>
+                <p>Hours and output have a {hours.corr_y > 0 ? 'positive' : hours.corr_y < 0 ? 'negative' : 'zero'} correlation in this sample. Hours have {fmt(hours.rel_std_dev, 2)} times output’s cyclical standard deviation.</p>
+              </article>
+            </div>
+            <div className="panel chart-panel">
+              <h3>Output, consumption, and investment around their trends</h3>
+              <p className="muted">{sample.name} · {quarterLabel(sample.start)}–{quarterLabel(sample.end)}. Above zero means above the estimated trend; below zero means below it.</p>
+              <TimeSeriesChart
+                slices={(['log_Y_pc', 'log_C_pc', 'log_I_pc'] as const).map((id) => {
+                  const slice = getCycleSlice(artifact, id, sampleId);
+                  return { ...slice, unit: 'Approximate percent deviation from trend', points: slice.points.map((p) => ({ ...p, value: p.value === null ? null : p.value * 100 })) };
+                })}
+                unitLabel="Approximate percent deviation from trend (100 × log deviation)"
+                zeroLine
+                height={320}
+              />
+              <p className="footnote">Quantities are per civilian adult (age 16+). Consumption is a constructed measure: nominal nondurables and services deflated with the GDP deflator, not official BEA real consumption. Investment includes consumer durables. These are descriptive comparisons, not statistical tests or causal evidence.</p>
+              <p className="footnote">HP trends are estimated separately within each sample. They are especially sensitive near the endpoints; recent deviations can change as new data arrive. The estimated cycle is not a recession chronology.</p>
+              <button type="button" className="inspect" onClick={() => go('visualizations')}>Explore log levels, trends, and cycles →</button>
+              {' · '}
+              <button type="button" className="inspect" onClick={() => go('moments')}>See all moments →</button>
+            </div>
+          </section>
+        )}
+        {/* Route 1: Detailed visualizations */}
         {route === 'visualizations' && (
           <VisualizationsView
             artifact={artifact}
@@ -260,7 +312,8 @@ export default function App() {
               onInspect={(focus) => {
                 setCompare(focus.slice(0, 4));
                 setSeriesId(focus[0]);
-                go('visualizations');
+                window.location.hash = `#/visualizations?mode=compare_cycles&sample=${sampleId}&series=${focus[0]}&compare=${focus.slice(0, 4).join(',')}`;
+                setRouteInfo(parseHashLocation());
               }}
             />
           </section>
@@ -327,9 +380,9 @@ export default function App() {
       {/* Footer */}
       <footer className="site-foot">
         <p>
-          Built strictly from <code>{artifact.artifact_id}</code>. Client-side static rendering: no server, no LLM, no external database. All values are read directly or computed in the browser from public macroeconomic data.
+          Sources: BEA, BLS, Federal Reserve/Treasury via FRED, and Fernald. Business-cycle sample: {quarterLabel(artifact.canonical_sample.start)}–{quarterLabel(artifact.canonical_sample.end)}; long-run figures show their own coverage.
         </p>
-        <p className="footnote">{artifact.provenance.vintage_caveat}</p>
+        <p className="footnote">Latest observations reflect the bundled data, not a live feed. Official release vintages are not recorded. <a href="#/methodology">Definitions, sources, and limitations →</a></p>
       </footer>
     </div>
   );

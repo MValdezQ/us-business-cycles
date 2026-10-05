@@ -32,6 +32,9 @@ export default function LeadLagView({
 
   return (
     <div className="panel">
+      {seriesIds.includes('real_rate') && (
+        <p className="callout warn">Real-rate correlations are provisional: the Treasury input’s original monthly-to-quarterly convention is unverified. The ex-post rate uses next-quarter realized inflation; timing is partly determined by that construction.</p>
+      )}
       <div className="panel-head">
         <h3>Lead/lag correlation with output</h3>
         <p className="muted">
