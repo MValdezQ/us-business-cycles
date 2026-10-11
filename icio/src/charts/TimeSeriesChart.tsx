@@ -202,10 +202,14 @@ export function TimeSeriesChart({
 
           {projectedIndex > 0 ? (
             <text
-              x={Math.min(x(projectedIndex - 0.5) + 5, innerWidth - 4)}
+              x={
+                innerWidth - x(projectedIndex - 0.5) < 105
+                  ? innerWidth - 4
+                  : x(projectedIndex - 0.5) + 5
+              }
               y={12}
               className="projected-label"
-              textAnchor="start"
+              textAnchor={innerWidth - x(projectedIndex - 0.5) < 105 ? 'end' : 'start'}
             >
               OECD projections
             </text>
@@ -259,7 +263,7 @@ export function TimeSeriesChart({
           {series.map((s) => (
             <span key={s.key}>
               <span className="legend-swatch" style={{ background: s.colour }} />
-              {s.label}: {format(s.values[readout] ?? 0)}
+              {s.label}: {s.values[readout] === null || s.values[readout] === undefined ? '—' : format(s.values[readout]!)}
             </span>
           ))}
         </div>

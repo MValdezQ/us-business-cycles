@@ -138,6 +138,7 @@ export function EconomyPicker({
   onChange,
   max = 8,
   hint,
+  resetLabel = 'Reset to six comparison economies',
 }: {
   label: string
   values: { value: string; label: string }[]
@@ -146,6 +147,7 @@ export function EconomyPicker({
   onChange: (values: string[]) => void
   max?: number
   hint?: string
+  resetLabel?: string
 }) {
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
@@ -376,7 +378,7 @@ export function EconomyPicker({
           className="picker-reset"
           onClick={resetPicker}
         >
-          Reset to six comparison economies
+          {resetLabel}
         </button>
       </div>
 

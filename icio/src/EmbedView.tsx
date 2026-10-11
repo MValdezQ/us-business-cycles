@@ -17,7 +17,12 @@ import {
   ServicesQuadrantFigure,
   WorldFigure,
 } from './figures'
-import { FOCUS_ECONOMIES, economyName } from './lib/derived'
+import {
+  FOCUS_ECONOMIES,
+  MAX_TREND_ECONOMIES,
+  TREND_DEFAULT_ECONOMIES,
+  economyName,
+} from './lib/derived'
 import { economiesForYear } from './lib/data'
 import { buildHash, buildEmbedHash, parseAllowedList, parseList, parseYear } from './lib/router'
 import type { RouteName } from './lib/router'
@@ -61,6 +66,15 @@ export function EmbedView({ data, embed, params }: Props) {
     defaultEconomies.length > 0 ? defaultEconomies : allowedEconomies,
     8,
   )
+  const trendAllowed = economiesForYear(data, data.metadata.coverage.years[0] ?? 2016)
+  const trendDefaults = TREND_DEFAULT_ECONOMIES.filter((code) => trendAllowed.includes(code))
+  const trendEconomies = parseAllowedList(
+    params.get('trend_economies'),
+    trendAllowed,
+    trendDefaults.length > 0 ? trendDefaults : trendAllowed,
+    MAX_TREND_ECONOMIES,
+  )
+  const trendMeasure = params.get('trend_measure') === 'level' ? 'level' : 'index'
   const requestedEconomy = params.get('economy')?.toUpperCase() ?? ''
   const economy = allowedEconomies.includes(requestedEconomy)
     ? requestedEconomy
@@ -95,8 +109,27 @@ export function EmbedView({ data, embed, params }: Props) {
     }
     if (embed === 'industries' && params.has('sort') && params.get('sort') !== sortKey) updates.sort = sortKey
     if (embed === 'industries' && params.has('measure') && params.get('measure') !== measure) updates.measure = measure
+    if (embed === 'world' && params.has('trend_economies')) {
+      const valid = parseList(params.get('trend_economies'))
+        .filter((code) => trendAllowed.includes(code))
+        .slice(0, MAX_TREND_ECONOMIES)
+      const rawTrend = params.get('trend_economies')
+      if (valid.length === 0) updates.trend_economies = null
+      else if (valid.join(',') !== rawTrend) updates.trend_economies = valid.join(',')
+    }
+    if (embed === 'world' && params.has('trend_measure') && params.get('trend_measure') !== trendMeasure) {
+      updates.trend_measure = trendMeasure
+    }
     if (Object.keys(updates).length > 0) setEmbedParams(updates)
-  }, [embed, params.toString(), allowedEconomies.join(','), requestedEconomy, economy])
+  }, [
+    embed,
+    params.toString(),
+    allowedEconomies.join(','),
+    trendAllowed.join(','),
+    requestedEconomy,
+    economy,
+    trendMeasure,
+  ])
 
   const containerRef = useRef<HTMLDivElement | null>(null)
 
@@ -129,7 +162,7 @@ export function EmbedView({ data, embed, params }: Props) {
   }, [embed, year, economies.join(','), economy, sortKey, measure])
 
   const fullParams = embed === 'world'
-    ? {}
+    ? Object.fromEntries(params.entries())
     : embed === 'industries'
       ? { year, focus: economy, sort: sortKey, measure }
       : embed === 'services'
@@ -202,6 +235,32 @@ export function EmbedView({ data, embed, params }: Props) {
     </>
   ) : null
 
+  const worldControls = embed === 'world' ? (
+    <>
+      <EconomyPicker
+        label="Comparison economies"
+        values={trendAllowed.map((code) => ({
+          value: code,
+          label: `${economyName(data, code)} (${code})`,
+        }))}
+        selected={trendEconomies}
+        resetValues={trendDefaults.length > 0 ? trendDefaults : trendAllowed}
+        onChange={(values) => setEmbedParams({ trend_economies: values.join(',') })}
+        max={MAX_TREND_ECONOMIES}
+        resetLabel="Reset to three comparison economies"
+      />
+      <ToggleGroup
+        label="First plot"
+        value={trendMeasure}
+        options={[
+          { value: 'index', label: 'Index (2016 = 100)' },
+          { value: 'level', label: 'USD levels' },
+        ]}
+        onChange={(value) => setEmbedParams({ trend_measure: value })}
+      />
+    </>
+  ) : null
+
   const growthControls = embed === 'growth' ? (
     <div
       style={{
@@ -216,8 +275,9 @@ export function EmbedView({ data, embed, params }: Props) {
     </div>
   ) : null
 
-  const controls = growthControls ?? (yearControl || compareControl || industryControls ? (
+  const controls = growthControls ?? (worldControls || yearControl || compareControl || industryControls ? (
     <ControlRow>
+      {worldControls}
       {yearControl}
       {compareControl}
       {growthEconomyControl}
@@ -238,7 +298,9 @@ export function EmbedView({ data, embed, params }: Props) {
         source={false}
         controls={controls}
       >
-        {embed === 'world' ? <WorldFigure data={data} /> : null}
+        {embed === 'world' ? (
+          <WorldFigure data={data} economies={trendEconomies} measure={trendMeasure} />
+        ) : null}
         {embed === 'decomposer' ? (
           <DecomposerFigure data={data} year={year} economies={economies} />
         ) : null}

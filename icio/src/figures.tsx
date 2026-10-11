@@ -24,6 +24,10 @@ import {
   decompositionSegments,
   economyName,
   industryName,
+  latestObservedWorld,
+  TREND_DEFAULT_ECONOMIES,
+  type TrendMeasure,
+  worldTrendSeries,
 } from './lib/derived'
 import { fmtPct, fmtSignedPct, fmtUsd } from './lib/format'
 import type { DashboardData } from './lib/types'
@@ -31,57 +35,64 @@ import type { DashboardData } from './lib/types'
 const SOURCE =
   'Source: OECD Inter-Country Input-Output tables, 2026 release; author\u2019s calculations.'
 
-export function WorldFigure({ data }: { data: DashboardData }) {
+export function WorldFigure({
+  data,
+  economies = TREND_DEFAULT_ECONOMIES,
+  measure = 'index',
+}: {
+  data: DashboardData
+  economies?: string[]
+  measure?: TrendMeasure
+}) {
   const years = data.metadata.coverage.years
   const projectedFrom = data.metadata.coverage.projected_years[0] ?? null
-  const level: TimeSeries[] = [
-    {
-      key: 'mfg_exports',
-      label: 'World manufacturing exports',
-      colour: groupColour('manufacturing'),
-      values: data.world.mfg_exports,
-    },
-  ]
-  const domesticShare: TimeSeries[] = [
-    {
-      key: 'dva',
-      label: 'Domestic content',
-      colour: groupColour('manufacturing'),
-      values: data.world.dva_share_incl_tax,
-    },
-  ]
-  const firstYear = years[0]!
-  const lastYear = years[years.length - 1]!
-  const firstShare = data.world.dva_share_incl_tax[0] ?? null
-  const lastShare = data.world.dva_share_incl_tax[years.length - 1] ?? null
-  const endpointText = (share: number | null) =>
-    share === null ? 'not available' : `${fmtPct(share, 1)} domestic, ${fmtPct(1 - share, 1)} foreign`
+  const level: TimeSeries[] = worldTrendSeries(data, economies, measure)
+  const domesticShare: TimeSeries[] = worldTrendSeries(data, economies, 'share')
+  const latestObserved = latestObservedWorld(data)
+  const latestHeadline =
+    latestObserved.value === null
+      ? 'not available'
+      : `$${(latestObserved.value / 1_000_000).toFixed(2)}tn`
   return (
     <>
-      <TimeSeriesChart
-        years={years}
-        series={level}
-        mode="line"
-        format={fmtUsd}
-        ariaLabel="World manufacturing exports by year"
-        projectedFrom={projectedFrom}
-        fromZero
-        height={200}
-      />
-      <TimeSeriesChart
-        years={years}
-        series={domesticShare}
-        mode="line"
-        format={(value) => fmtPct(value, 0)}
-        ariaLabel="Domestic content percentage of world manufacturing exports by year"
-        projectedFrom={projectedFrom}
-        yDomain={[0, 1]}
-        height={190}
-      />
+      <p className="current-price-callout">CURRENT PRICES · NOT VOLUME</p>
+      <p className="figure-note world-headline">
+        World manufacturing exports were {latestHeadline} in {latestObserved.year}, the latest
+        observed year in this release.
+      </p>
+      <section className="world-plot" aria-label="Nominal manufacturing export trend">
+        <h4>{measure === 'index' ? 'Nominal export value index (2016 = 100)' : 'Nominal export value levels'}</h4>
+        <TimeSeriesChart
+          years={years}
+          series={level}
+          mode="line"
+          format={measure === 'index' ? (value) => `${value.toFixed(0)}` : fmtUsd}
+          ariaLabel={`${measure === 'index' ? 'Nominal manufacturing export value index, 2016 equals 100' : 'Nominal manufacturing export value levels'} by year`}
+          projectedFrom={projectedFrom}
+          fromZero={measure === 'level'}
+          height={220}
+          yLabel={measure === 'index' ? '2016 = 100' : 'Million USD'}
+        />
+      </section>
+      <section className="world-plot" aria-label="Domestic content trend">
+        <h4>Domestic value added share of manufacturing exports</h4>
+        <TimeSeriesChart
+          years={years}
+          series={domesticShare}
+          mode="line"
+          format={(value) => fmtPct(value, 0)}
+          ariaLabel="Domestic value added percentage of manufacturing exports by country and world"
+          projectedFrom={projectedFrom}
+          yDomain={[0, 1]}
+          height={220}
+          yLabel="Share of export value"
+        />
+      </section>
       <p className="figure-note">
-        2023&ndash;2024 are labelled OECD projections, not observations. Foreign content is the
-        complement of domestic content. {firstYear}: {endpointText(firstShare)}; {lastYear}:{' '}
-        {endpointText(lastShare)}.
+        Both plots are descriptive co-movements, not causal estimates. The shaded 2023&ndash;2024
+        interval is labelled OECD projections, not observations. Domestic value added is the
+        share produced in the exporting economy, including domestic net taxes on products.
+        {measure === 'level' ? ' In USD levels, the world line sets the scale; the index view is better for comparing country paths.' : ''}
       </p>
       <p className="figure-source">{SOURCE}</p>
     </>

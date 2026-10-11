@@ -6,14 +6,92 @@
  * the dashboard cannot disagree with the Python analysis.
  */
 
-import { groupColour, tint } from './chart-utils'
+import { economyColour, groupColour, tint } from './chart-utils'
 import type { StackBar, StackSegment } from '../charts/StackedBarChart'
-import { countryIndex, num } from './data'
+import { countryIndex, economiesForYear, num, countrySeries } from './data'
 import { fmtUsd } from './format'
 import type { DashboardData, Numeric } from './types'
 
 /** The six economies the piece argues through. Others remain selectable everywhere. */
 export const FOCUS_ECONOMIES = ['MEX', 'CHN', 'DEU', 'FRA', 'USA', 'CAN']
+
+/** The opening comparison has its own selection, separate from the six-country decomposer. */
+export const TREND_DEFAULT_ECONOMIES = ['MEX', 'CHN', 'DEU']
+export const MAX_TREND_ECONOMIES = 4
+export type TrendMeasure = 'index' | 'level'
+
+export interface WorldTrendSeries {
+  key: string
+  label: string
+  colour: string
+  values: Numeric[]
+}
+
+const WORLD_REFERENCE_COLOUR = '#252a31'
+const BASE_YEAR = 2016
+
+/** A stable colour lookup: adding/removing a country never recolours another country. */
+export function economySeriesColour(data: DashboardData, code: string): string {
+  const focusIndex = FOCUS_ECONOMIES.indexOf(code)
+  if (focusIndex >= 0) return economyColour(focusIndex)
+  const firstYear = data.metadata.coverage.years[0]
+  const otherCodes = economiesForYear(data, firstYear).filter((entry) => !FOCUS_ECONOMIES.includes(entry))
+  return economyColour(FOCUS_ECONOMIES.length + Math.max(otherCodes.indexOf(code), 0))
+}
+
+function indexed(values: Numeric[], years: number[]): Numeric[] {
+  const base = values[years.indexOf(BASE_YEAR)] ?? null
+  if (base === null || !Number.isFinite(base) || base === 0) return years.map(() => null)
+  return values.map((value) =>
+    value === null || !Number.isFinite(value) ? null : (value / base) * 100,
+  )
+}
+
+/**
+ * Shared read-only series for the two opening plots. The first series is always world, followed
+ * by the selected countries. Index mode is nominal current-price exports rebased to 2016 = 100;
+ * it deliberately does not use the published chain-linked volume index.
+ */
+export function worldTrendSeries(
+  data: DashboardData,
+  economies: string[],
+  measure: TrendMeasure | 'share',
+): WorldTrendSeries[] {
+  const years = data.metadata.coverage.years
+  const worldValues =
+    measure === 'index'
+      ? indexed(data.world.mfg_exports, years)
+      : measure === 'share'
+        ? data.world.dva_share_incl_tax
+        : data.world.mfg_exports
+  const world: WorldTrendSeries = {
+    key: 'world',
+    label: 'World',
+    colour: WORLD_REFERENCE_COLOUR,
+    values: worldValues,
+  }
+  const countries = economies.slice(0, MAX_TREND_ECONOMIES).map((code) => {
+    const exports = countrySeries(data, code, (row) => data.country.mfg_exports[row]).map((entry) => entry.value)
+    const shares = countrySeries(data, code, (row) => data.country.dva_share_incl_tax[row]).map((entry) => entry.value)
+    const values = measure === 'index' ? indexed(exports, years) : exports
+    return {
+      key: code,
+      label: `${economyName(data, code)} (${code})`,
+      colour: economySeriesColour(data, code),
+      values: measure === 'share' ? shares : values,
+    }
+  })
+  return [world, ...countries]
+}
+
+export function latestObservedWorld(data: DashboardData): { year: number; value: Numeric } {
+  for (let i = data.world.year.length - 1; i >= 0; i -= 1) {
+    if (data.world.projected[i] !== true && data.world.mfg_exports[i] !== null) {
+      return { year: data.world.year[i]!, value: data.world.mfg_exports[i] ?? null }
+    }
+  }
+  return { year: data.world.year[data.world.year.length - 1] ?? BASE_YEAR, value: null }
+}
 
 /** Default drill-down industry: motor vehicles, the sector readers arrive with priors about. */
 export const DEFAULT_INDUSTRY = 'C29'

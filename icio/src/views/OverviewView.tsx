@@ -1,52 +1,56 @@
-/**
- * Overview: the world picture, then the anchor figure.
- *
- * The sequence is deliberate — establish the global trend, then show that the interesting
- * variation is in the composition of a country's exports, not in their size.
- */
+/** Overview: country comparison first, then the existing composition anchor. */
 
 import { StackLegend, StackedBarChart } from '../charts/StackedBarChart'
 import type { StackBar, StackSegment } from '../charts/StackedBarChart'
-import { TimeSeriesChart, type TimeSeries } from '../charts/TimeSeriesChart'
 import { Figure } from '../components/Figure'
-import { ControlRow, Select } from '../components/controls'
+import { ControlRow, EconomyPicker, Select, ToggleGroup } from '../components/controls'
+import { WorldFigure } from '../figures'
 import { groupColour } from '../lib/chart-utils'
-import { countryIndex } from '../lib/data'
+import { countryIndex, economiesForYear } from '../lib/data'
 import {
   FOCUS_ECONOMIES,
+  MAX_TREND_ECONOMIES,
+  TREND_DEFAULT_ECONOMIES,
   decompositionBar,
   decompositionSegments,
   economyName,
 } from '../lib/derived'
 import { fmtUsd, fmtPct, projectedNote } from '../lib/format'
-import { parseList, parseYear } from '../lib/router'
+import { parseAllowedList, parseList, parseYear } from '../lib/router'
 import type { ViewProps } from '../lib/view'
+import { useEffect } from 'react'
 
 export function OverviewView({ data, params, setParams }: ViewProps) {
   const years = data.metadata.coverage.years
   const year = parseYear(params.get('year'), years, 2022)
+  const projectedFrom = data.metadata.coverage.projected_years[0] ?? null
   const selected = parseList(params.get('economies'))
   const economies = selected.length > 0 ? selected : FOCUS_ECONOMIES
-  const projectedFrom = data.metadata.coverage.projected_years[0] ?? null
+  const trendAllowed = economiesForYear(data, years[0] ?? 2016)
+  const trendDefaults = TREND_DEFAULT_ECONOMIES.filter((code) => trendAllowed.includes(code))
+  const trendEconomies = parseAllowedList(
+    params.get('trend_economies'),
+    trendAllowed,
+    trendDefaults.length > 0 ? trendDefaults : trendAllowed,
+    MAX_TREND_ECONOMIES,
+  )
+  const trendMeasure = params.get('trend_measure') === 'level' ? 'level' : 'index'
 
-  const levelSeries: TimeSeries[] = [
-    {
-      key: 'mfg_exports',
-      label: 'World manufacturing exports',
-      colour: groupColour('manufacturing'),
-      values: data.world.mfg_exports,
-      dashed: false,
-    },
-  ]
-
-  const domesticShareSeries: TimeSeries[] = [
-    {
-      key: 'dva',
-      label: 'Domestic content',
-      colour: groupColour('manufacturing'),
-      values: data.world.dva_share_incl_tax,
-    },
-  ]
+  useEffect(() => {
+    const updates: Record<string, string | null> = {}
+    if (params.has('trend_economies')) {
+      const valid = parseList(params.get('trend_economies'))
+        .filter((code) => trendAllowed.includes(code))
+        .slice(0, MAX_TREND_ECONOMIES)
+      const raw = params.get('trend_economies')
+      if (valid.length === 0) updates.trend_economies = null
+      else if (valid.join(',') !== raw) updates.trend_economies = valid.join(',')
+    }
+    if (params.has('trend_measure') && params.get('trend_measure') !== trendMeasure) {
+      updates.trend_measure = trendMeasure
+    }
+    if (Object.keys(updates).length > 0) setParams(updates)
+  }, [params.toString(), trendAllowed.join(','), trendMeasure, setParams])
 
   const segments: StackSegment[] = decompositionSegments(data)
   const bars: StackBar[] = economies
@@ -74,13 +78,6 @@ export function OverviewView({ data, params, setParams }: ViewProps) {
   })
 
   const worldShare = data.world.dva_share_incl_tax[years.indexOf(year)] ?? null
-  const firstYear = years[0]!
-  const lastYear = years[years.length - 1]!
-  const firstWorldShare = data.world.dva_share_incl_tax[0] ?? null
-  const lastWorldShare = data.world.dva_share_incl_tax[years.length - 1] ?? null
-  const endpointText = (share: number | null) =>
-    share === null ? 'not available' : `${fmtPct(share, 1)} domestic, ${fmtPct(1 - share, 1)} foreign`
-
   return (
     <>
       <section className="prose">
@@ -98,37 +95,43 @@ export function OverviewView({ data, params, setParams }: ViewProps) {
       </section>
 
       <Figure
-        title="World manufacturing exports and domestic content"
-        lede="The level series shows the value of world manufacturing exports. The percentage line shows the domestic share of that value."
+        title="Compare manufacturing exports: current prices and domestic content"
+        lede="Follow nominal export values for the world and up to four selected economies, then compare the domestic value added share. These are descriptive co-movements, not causal estimates."
+        source={false}
+        controls={
+          <ControlRow>
+            <EconomyPicker
+              label="Comparison economies"
+              values={trendAllowed.map((code) => ({
+                value: code,
+                label: `${economyName(data, code)} (${code})`,
+              }))}
+              selected={trendEconomies}
+              resetValues={trendDefaults.length > 0 ? trendDefaults : trendAllowed}
+              onChange={(values) => setParams({ trend_economies: values.join(',') })}
+              max={MAX_TREND_ECONOMIES}
+              resetLabel="Reset to three comparison economies"
+            />
+            <ToggleGroup
+              label="First plot"
+              value={trendMeasure}
+              options={[
+                { value: 'index', label: 'Index (2016 = 100)' },
+                { value: 'level', label: 'USD levels' },
+              ]}
+              onChange={(value) => setParams({ trend_measure: value })}
+            />
+          </ControlRow>
+        }
         note={
           <>
-            The shaded 2023&ndash;2024 interval is labelled OECD projections, not observations.
-            Foreign content is the complement of domestic content. {firstYear}:{' '}
-            {endpointText(firstWorldShare)}; {lastYear}: {endpointText(lastWorldShare)}.
+            The world series remains in both plots as the dark reference. The USD-level option is
+            in current prices and is not a volume measure. The shaded 2023&ndash;2024 interval is
+            labelled OECD projections, not observations.
           </>
         }
       >
-        <TimeSeriesChart
-          years={years}
-          series={levelSeries}
-          mode="line"
-          format={fmtUsd}
-          ariaLabel="World manufacturing exports by year"
-          projectedFrom={projectedFrom}
-          fromZero
-          yLabel="Manufacturing exports"
-        />
-        <TimeSeriesChart
-          years={years}
-            series={domesticShareSeries}
-            mode="line"
-          format={(value) => fmtPct(value, 0)}
-            ariaLabel="Domestic content percentage of world manufacturing exports by year"
-          projectedFrom={projectedFrom}
-          yLabel="Share of export value"
-          yDomain={[0, 1]}
-          height={220}
-        />
+        <WorldFigure data={data} economies={trendEconomies} measure={trendMeasure} />
       </Figure>
 
       <Figure

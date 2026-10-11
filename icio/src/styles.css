@@ -182,6 +182,30 @@ code {
   font-size: 0.8rem;
 }
 
+.current-price-callout {
+  margin: 0 0 4px;
+  color: var(--warn);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.world-headline {
+  margin-top: 0;
+}
+
+.world-plot + .world-plot {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.world-plot h4 {
+  margin: 0;
+  font-size: 0.96rem;
+  color: var(--ink-soft);
+}
+
 .details {
   margin-top: 16px;
 }
@@ -987,6 +1011,10 @@ table.table tbody th {
 
   .figure {
     padding: 16px 14px 12px;
+  }
+
+  .time-axis-year {
+    font-size: 9px;
   }
 
   .stacked-label {

@@ -17,3 +17,9 @@ npm run build
 
 The build is path-independent (`base: './'`) and produces `dist/`. The production packaging in
 the repository root copies that output to `site/icio/` alongside `site/us-business-cycles/`.
+
+The opening comparison defaults to Mexico, China, and Germany, allows at most four countries,
+excludes Rest of the World, and keeps the world series visible. Its URL state uses
+`trend_economies` and `trend_measure` (`index` or `level`); both the full view and `world` embed
+preserve those parameters. The index is nominal current-price manufacturing exports rebased to
+2016 = 100, while USD levels remain current prices, not volume.
