@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:pages": "npm run verify:artifact && npm run build && node scripts/package-pages.mjs",
+    "build:pages": "npm run verify:artifact && npm run build && npm ci --prefix icio && npm run build --prefix icio && node scripts/package-pages.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "verify:artifact": "node scripts/verify-artifact.mjs"

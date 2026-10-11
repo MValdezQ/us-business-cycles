@@ -53,8 +53,9 @@ that convention. No published observations or moments were changed for this pres
 
 ## Cloudflare Pages deployment (prepared, not deployed)
 
-Create a separate GitHub repository for this project and connect it to a new Cloudflare
-Pages project (suggested project name: `econlab`). Do not change the website's existing project.
+This repository packages two products in the existing Cloudflare Pages project: the business-cycle
+explorer at `/us-business-cycles/` and the ICIO dashboard at `/icio/`. No new Cloudflare project,
+DNS record, or website project is required.
 
 | Cloudflare setting | Value |
 | --- | --- |
@@ -65,14 +66,13 @@ Pages project (suggested project name: `econlab`). Do not change the website's e
 | Build output directory | `site` |
 | Build environment variable | `NODE_VERSION=22` |
 
-Cloudflare installs the npm dependencies from this repository. The publication command checks
-artifact consistency, type-checks and builds the app, then packages it under
-`site/us-business-cycles/`. Generated output is excluded from Git.
-The root URL redirects to `/us-business-cycles/`; it is not an EconLab landing page yet.
+Cloudflare installs the npm dependencies from this repository. The publication command checks the
+business-cycle artifact, builds both self-contained apps, then packages them under
+`site/us-business-cycles/` and `site/icio/`. Generated output is excluded from Git.
+The root URL redirects to `/us-business-cycles/`.
 
-Test the initial `https://<project>.pages.dev/us-business-cycles/` URL. Then add
-`econlab.mvaldez.de` in the new Pages project's Custom domains section, and follow its DNS
-instructions. Do not replace the records for `mvaldez.de` or `www`.
+The existing Pages project already owns the intended custom domain; no DNS change is part of this
+build preparation. Do not replace the records for `mvaldez.de` or `www`.
 
 The generated root `_headers` file restricts framing to `https://mvaldez.de` and
 `https://www.mvaldez.de`. It applies to all paths, including the HTML used for hash routes.
@@ -84,6 +84,13 @@ Before considering deployment complete, inspect the live HTML response headers a
 iframe on the permitted website and on a different origin. Local file packaging tests do not
 establish that Cloudflare is applying the headers. Test the custom domain as well as pages.dev.
 Check charts, data loading, links, and automatic iframe height after deployment.
+
+## ICIO snapshot
+
+`icio/` is a reproducible source snapshot of the dashboard app. Its analytical source is the
+external `../ICIO` repository in the working workspace, while the five derived dashboard JSON
+files are checked into `icio/public/data/`. The browser does not download raw ICIO tables or solve
+a Leontief system; the Pages build does not require the external analysis repository.
 
 ## Article integration (local, not deployed)
 
