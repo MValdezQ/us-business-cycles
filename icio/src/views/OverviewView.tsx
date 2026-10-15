@@ -1,31 +1,97 @@
-/** Overview: country comparison first, then the existing composition anchor. */
+/** Overview: composition first, with the existing time view folded below it. */
 
-import { StackLegend, StackedBarChart } from '../charts/StackedBarChart'
-import type { StackBar, StackSegment } from '../charts/StackedBarChart'
 import { Figure } from '../components/Figure'
 import { ControlRow, EconomyPicker, Select, ToggleGroup } from '../components/controls'
 import { WorldFigure } from '../figures'
-import { groupColour } from '../lib/chart-utils'
-import { countryIndex, economiesForYear } from '../lib/data'
+import { economiesForYear } from '../lib/data'
 import {
   FOCUS_ECONOMIES,
   MAX_TREND_ECONOMIES,
   TREND_DEFAULT_ECONOMIES,
-  decompositionBar,
-  decompositionSegments,
   economyName,
+  mainCompositionBar,
+  mainCompositionSegments,
 } from '../lib/derived'
-import { fmtUsd, fmtPct, projectedNote } from '../lib/format'
-import { parseAllowedList, parseList, parseYear } from '../lib/router'
+import type { MainCompositionBar } from '../lib/derived'
+import { fmtPct, fmtUsd, projectedNote } from '../lib/format'
+import { buildHash, parseAllowedList, parseList, parseYear } from '../lib/router'
 import type { ViewProps } from '../lib/view'
 import { useEffect } from 'react'
+
+const MAX_MAIN_ECONOMIES = 6
+
+function exactUsd(value: number): string {
+  return `${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} million USD`
+}
+
+function OverviewCompositionChart({ bars, year }: { bars: MainCompositionBar[]; year: number }) {
+  const segments = mainCompositionSegments()
+  return (
+    <div className="overview-stack" role="list" aria-label={`Six-part value-added composition in ${year}`}>
+      {bars.map((bar) => {
+        const positiveTotal = bar.available
+          ? segments.reduce((sum, segment) => {
+              const value = bar.values[segment.key]
+              return sum + (value !== null && value > 0 ? value : 0)
+            }, 0)
+          : 0
+        return (
+          <div key={bar.key} className={`overview-stack-row${bar.available ? '' : ' is-unavailable'}`} role="listitem">
+            <div className="overview-stack-label">
+              <span className="overview-stack-label-main">{bar.label}</span>
+              <span className="overview-stack-label-sub">
+                {bar.available ? `Exports: ${fmtUsd(bar.denominator)}` : 'Composition unavailable'}
+              </span>
+            </div>
+            <div
+              className="overview-stack-track"
+              aria-label={
+                bar.available
+                  ? `${bar.label}: six published components of ${exactUsd(bar.denominator!)}`
+                  : `${bar.label}: composition unavailable for ${year}`
+              }
+            >
+              {bar.available ? (
+                segments.map((segment) => {
+                  const value = bar.values[segment.key]
+                  if (value === null || value <= 0 || positiveTotal <= 0) return null
+                  const share = value / bar.denominator!
+                  const width = (value / positiveTotal) * 100
+                  const description = `${bar.label}: ${segment.label}, ${exactUsd(value)} of ${exactUsd(bar.denominator!)} (${fmtPct(share, 2)} of gross exports)`
+                  return (
+                    <span
+                      key={segment.key}
+                      className="overview-stack-segment"
+                      style={{ width: `${width}%`, background: segment.colour }}
+                      title={description}
+                      aria-label={description}
+                    />
+                  )
+                })
+              ) : (
+                <span className="overview-stack-unavailable">Unavailable for this country-year</span>
+              )}
+            </div>
+            <div className="overview-stack-total">{bar.available ? fmtUsd(bar.denominator) : 'Unavailable'}</div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 export function OverviewView({ data, params, setParams }: ViewProps) {
   const years = data.metadata.coverage.years
   const year = parseYear(params.get('year'), years, 2022)
   const projectedFrom = data.metadata.coverage.projected_years[0] ?? null
-  const selected = parseList(params.get('economies'))
-  const economies = selected.length > 0 ? selected : FOCUS_ECONOMIES
+  const mainAllowed = economiesForYear(data, year)
+  const mainDefaults = FOCUS_ECONOMIES.filter((code) => mainAllowed.includes(code))
+  const mainEconomies = parseAllowedList(
+    params.get('economies'),
+    mainAllowed,
+    mainDefaults.length > 0 ? mainDefaults : mainAllowed,
+    MAX_MAIN_ECONOMIES,
+  )
   const trendAllowed = economiesForYear(data, years[0] ?? 2016)
   const trendDefaults = TREND_DEFAULT_ECONOMIES.filter((code) => trendAllowed.includes(code))
   const trendEconomies = parseAllowedList(
@@ -38,6 +104,13 @@ export function OverviewView({ data, params, setParams }: ViewProps) {
 
   useEffect(() => {
     const updates: Record<string, string | null> = {}
+    if (params.has('economies')) {
+      const valid = parseList(params.get('economies'))
+        .filter((code) => mainAllowed.includes(code))
+        .slice(0, MAX_MAIN_ECONOMIES)
+      const canonical = valid.join(',')
+      if (canonical !== params.get('economies')) updates.economies = canonical || null
+    }
     if (params.has('trend_economies')) {
       const valid = parseList(params.get('trend_economies'))
         .filter((code) => trendAllowed.includes(code))
@@ -50,156 +123,136 @@ export function OverviewView({ data, params, setParams }: ViewProps) {
       updates.trend_measure = trendMeasure
     }
     if (Object.keys(updates).length > 0) setParams(updates)
-  }, [params.toString(), trendAllowed.join(','), trendMeasure, setParams])
+  }, [
+    mainAllowed.join(','),
+    params.toString(),
+    trendAllowed.join(','),
+    trendMeasure,
+    setParams,
+  ])
 
-  const segments: StackSegment[] = decompositionSegments(data)
-  const bars: StackBar[] = economies
-    .map((code) => decompositionBar(data, code, year))
-    .filter((bar): bar is StackBar => bar !== null)
+  const mainBars = mainEconomies.map((code) => mainCompositionBar(data, code, year))
+  const preserved = { year, economies: mainEconomies.join(',') }
 
-  // A compact legend: six domestic groups, six foreign groups and taxes is too many swatches
-  // to read at a glance, so the anchor figure groups them into the three things that matter.
-  const summarySegments: StackSegment[] = [
-    { key: 'domestic', label: 'Domestic value added (incl. domestic taxes)', colour: groupColour('manufacturing') },
-    { key: 'foreign', label: 'Foreign value added (incl. foreign taxes)', colour: groupColour('services') },
-  ]
-
-  const summaryBars: StackBar[] = economies.map((code) => {
-    const full = decompositionBar(data, code, year)
-    const i = countryIndex(data, code, year)
-    const domestic = i < 0 ? null : data.country.dva_exports_incl_tax[i]
-    const foreign = i < 0 ? null : data.country.fva_exports_incl_tax[i]
-    return {
-      key: code,
-      label: economyName(data, code),
-      values: { domestic: domestic ?? null, foreign: foreign ?? null },
-      totalText: full?.totalText,
-    }
-  })
-
-  const worldShare = data.world.dva_share_incl_tax[years.indexOf(year)] ?? null
   return (
     <>
-      <section className="prose">
-        <h2>Manufactured exports are often a team effort</h2>
+      <section className="prose overview-intro">
         <p>
-          A manufactured export often brings together people and firms in several countries.
-          Each step contributes a portion of the value, from inputs and design to transport and
-          finance. The ICIO tables trace those portions back to source industries and separate
-          domestic from foreign value added.
-        </p>
-        <p>
-          The focus here is the <em>mix</em>: how much export value was created domestically and
-          how much came from abroad.
+          Manufacturing exports contain value produced by many industries, at home and abroad. Explore their composition across countries, with particular attention to service inputs.
         </p>
       </section>
 
       <Figure
-        title="Compare manufacturing exports: current prices and domestic content"
-        lede="Follow nominal export values for the world and up to four selected economies, then compare the domestic value added share. These are descriptive co-movements, not causal estimates."
-        source={false}
+        title="Value added in manufacturing exports"
+        lede="Six published components show where the value in each country’s manufacturing exports was produced."
         controls={
-          <ControlRow>
-            <EconomyPicker
-              label="Comparison economies"
-              values={trendAllowed.map((code) => ({
-                value: code,
-                label: `${economyName(data, code)} (${code})`,
-              }))}
-              selected={trendEconomies}
-              resetValues={trendDefaults.length > 0 ? trendDefaults : trendAllowed}
-              onChange={(values) => setParams({ trend_economies: values.join(',') })}
-              max={MAX_TREND_ECONOMIES}
-              resetLabel="Reset to three comparison economies"
-            />
-            <ToggleGroup
-              label="First plot"
-              value={trendMeasure}
-              options={[
-                { value: 'index', label: 'Index (2016 = 100)' },
-                { value: 'level', label: 'USD levels' },
-              ]}
-              onChange={(value) => setParams({ trend_measure: value })}
-            />
-          </ControlRow>
+          <div className="overview-main-controls">
+            <ControlRow>
+              <Select
+                label="Year"
+                value={year}
+                options={years.map((y) => ({
+                  value: y,
+                  label: projectedNote(y, data.metadata.coverage.projected_years.includes(y)),
+                }))}
+                onChange={(value) => setParams({ year: value })}
+                hint={projectedFrom !== null && year >= projectedFrom ? 'projected' : undefined}
+              />
+              <EconomyPicker
+                label="Countries"
+                values={mainAllowed.map((code) => ({
+                  value: code,
+                  label: `${economyName(data, code)} (${code})`,
+                }))}
+                selected={mainEconomies}
+                resetValues={mainDefaults.length > 0 ? mainDefaults : mainAllowed}
+                onChange={(values) => setParams({ economies: values.join(',') })}
+                max={MAX_MAIN_ECONOMIES}
+                resetLabel="Reset to six focus countries"
+              />
+            </ControlRow>
+          </div>
         }
         note={
           <>
-            The world series remains in both plots as the dark reference. The USD-level option is
-            in current prices and is not a volume measure. The shaded 2023&ndash;2024 interval is
-            labelled OECD projections, not observations.
+            Shares use published gross exports as the denominator. Manufacturing and services are
+            basic-price value added; domestic and foreign net taxes on products appear only in
+            their respective other-content segments. Small closure differences from published
+            component rounding are normalized in the bar geometry. Projected years are marked.
           </>
         }
       >
-        <WorldFigure data={data} economies={trendEconomies} measure={trendMeasure} />
+        <OverviewCompositionChart bars={mainBars} year={year} />
+        <div className="legend overview-stack-legend">
+          {mainCompositionSegments().map((segment) => (
+            <span key={segment.key} className="legend-item">
+              <span className="legend-swatch" style={{ background: segment.colour }} />
+              {segment.label}
+            </span>
+          ))}
+          <span className="legend-note">Other content includes agriculture, mining, utilities, construction, and the relevant net taxes.</span>
+        </div>
       </Figure>
 
-      <Figure
-        title="Manufacturing exports by source of value added"
-        lede="Each bar splits manufacturing export value between domestic and foreign sources. Both include net taxes on products, matching the OECD tax-inclusive convention."
-        controls={
-          <ControlRow>
-            <Select
-              label="Year"
-              value={year}
-              options={years.map((y) => ({
-                value: y,
-                label: projectedNote(y, data.metadata.coverage.projected_years.includes(y)),
-              }))}
-              onChange={(value) => setParams({ year: value })}
-              hint={projectedFrom !== null && year >= projectedFrom ? 'projected' : undefined}
-            />
-          </ControlRow>
-        }
-        note={
-          <>
-            Read this as composition, not as level: every bar is a full 100% of that
-            country&rsquo;s export value, and the number on the right is the size of the
-            exports being divided. In {year} the world domestic share was{' '}
-            {worldShare === null ? 'not available' : fmtPct(worldShare, 1)}.
-          </>
-        }
-      >
-        <StackedBarChart
-          bars={summaryBars}
-          segments={summarySegments}
-          mode="share"
-          format={fmtUsd}
-          ariaLabel={`Domestic and foreign value added in manufacturing exports, ${year}`}
-          labelWidth={170}
-        />
-        <StackLegend
-          segments={summarySegments}
-          note="Taxes less subsidies on products are folded into the domestic and foreign halves here. The full sector split is on the Economies page."
-        />
-        <details className="details">
-          <summary>Show the full sector breakdown</summary>
-          <StackedBarChart
-            bars={bars}
-            segments={segments}
-            mode="share"
-            format={fmtUsd}
-            ariaLabel={`Manufacturing export value by source sector, ${year}`}
-            labelWidth={170}
-          />
-          <StackLegend segments={segments} />
-        </details>
-      </Figure>
-
-      <section className="prose">
-        <h2>What to look for</h2>
-        <p>
-          Manufacturing exports carry <em>services</em> value from distribution, transport,
-          finance, and professional work. The{' '}
-          <a href="#/services">services page</a> plots that against how much of it each country
-          supplies itself.
-        </p>
-        <p>
-          These are current-price values, so a rise in exports need not mean more physical output.
-          The <a href="#/growth">prices versus volume page</a> separates price effects from the
-          chain-linked volume measure.
-        </p>
+      <section className="next-steps" aria-label="Continue exploring">
+        <a className="next-step" href={buildHash('economies', preserved)}>
+          <span className="next-step-kicker">Compare economies</span>
+          <strong>See all 80 economies</strong>
+          <span>Rank export size, domestic share, foreign share, and services content.</span>
+        </a>
+        <a className="next-step" href={buildHash('services', { ...preserved, focus: mainEconomies[0] })}>
+          <span className="next-step-kicker">Explore service inputs</span>
+          <strong>Intensity versus domestic supply</strong>
+          <span>See how much service input manufacturing exports carry and where it was produced.</span>
+        </a>
+        <a className="next-step" href={buildHash('growth', preserved)}>
+          <span className="next-step-kicker">Compare value and volume</span>
+          <strong>Price-adjusted growth</strong>
+          <span>Separate current-price export growth from the chain-linked volume measure.</span>
+        </a>
       </section>
+
+      <details className="overview-trend-details">
+        <summary>Changes over time</summary>
+        <Figure
+          title="Manufacturing exports and domestic content over time"
+          lede="Use the controls to compare nominal export paths and domestic value added shares."
+          source={false}
+          controls={
+            <ControlRow>
+              <EconomyPicker
+                label="Comparison countries"
+                values={trendAllowed.map((code) => ({
+                  value: code,
+                  label: `${economyName(data, code)} (${code})`,
+                }))}
+                selected={trendEconomies}
+                resetValues={trendDefaults.length > 0 ? trendDefaults : trendAllowed}
+                onChange={(values) => setParams({ trend_economies: values.join(',') })}
+                max={MAX_TREND_ECONOMIES}
+                resetLabel="Reset to three comparison countries"
+              />
+              <ToggleGroup
+                label="Export plot"
+                value={trendMeasure}
+                options={[
+                  { value: 'index', label: 'Index (2016 = 100)' },
+                  { value: 'level', label: 'USD levels' },
+                ]}
+                onChange={(value) => setParams({ trend_measure: value })}
+              />
+            </ControlRow>
+          }
+          note={
+            <>
+              The world series remains in both plots as the reference. USD levels are current
+              prices, not a volume measure. Projected years are shaded and labelled.
+            </>
+          }
+        >
+          <WorldFigure data={data} economies={trendEconomies} measure={trendMeasure} />
+        </Figure>
+      </details>
     </>
   )
 }

@@ -20,6 +20,28 @@ export const TREND_DEFAULT_ECONOMIES = ['MEX', 'CHN', 'DEU']
 export const MAX_TREND_ECONOMIES = 4
 export type TrendMeasure = 'index' | 'level'
 
+export type MainCompositionKey =
+  | 'domestic_manufacturing'
+  | 'domestic_services'
+  | 'other_domestic'
+  | 'foreign_manufacturing'
+  | 'foreign_services'
+  | 'other_foreign'
+
+export interface MainCompositionSegment {
+  key: MainCompositionKey
+  label: string
+  colour: string
+}
+
+export interface MainCompositionBar {
+  key: string
+  label: string
+  denominator: Numeric
+  values: Record<MainCompositionKey, Numeric>
+  available: boolean
+}
+
 export interface WorldTrendSeries {
   key: string
   label: string
@@ -91,6 +113,77 @@ export function latestObservedWorld(data: DashboardData): { year: number; value:
     }
   }
   return { year: data.world.year[data.world.year.length - 1] ?? BASE_YEAR, value: null }
+}
+
+/** The six published components used by the overview's first-read figure. */
+export function mainCompositionSegments(): MainCompositionSegment[] {
+  return [
+    { key: 'domestic_manufacturing', label: 'Domestic manufacturing', colour: groupColour('manufacturing') },
+    { key: 'domestic_services', label: 'Domestic services', colour: groupColour('services') },
+    { key: 'other_domestic', label: 'Other domestic', colour: groupColour('construction') },
+    { key: 'foreign_manufacturing', label: 'Foreign manufacturing', colour: tint(groupColour('manufacturing')) },
+    { key: 'foreign_services', label: 'Foreign services', colour: tint(groupColour('services')) },
+    { key: 'other_foreign', label: 'Other foreign', colour: tint(groupColour('construction')) },
+  ]
+}
+
+const NON_MAIN_GROUPS = ['agriculture', 'mining', 'utilities', 'construction'] as const
+
+function publishedOtherContent(
+  data: DashboardData,
+  side: 'dva' | 'fva',
+  taxField: 'tax_content_domestic' | 'tax_content_foreign',
+  row: number,
+): Numeric {
+  let total = 0
+  for (const group of NON_MAIN_GROUPS) {
+    const value = data.country[side === 'dva' ? 'dva_from' : 'fva_from'][group][row]
+    if (value === null || !Number.isFinite(value)) return null
+    total += value
+  }
+  const tax = data.country[taxField][row]
+  if (tax === null || !Number.isFinite(tax)) return null
+  total += tax
+  return Number.isFinite(total) ? total : null
+}
+
+/**
+ * Read the six first-read components from the published country table.
+ * Manufacturing and services stay at basic prices; domestic and foreign net taxes enter only
+ * their respective "other" bucket. A signed or incomplete component makes the bar unavailable
+ * rather than silently turning it into a plausible positive stack.
+ */
+export function mainCompositionBar(
+  data: DashboardData,
+  economy: string,
+  year: number,
+): MainCompositionBar {
+  const row = countryIndex(data, economy, year)
+  const emptyValues: Record<MainCompositionKey, Numeric> = {
+    domestic_manufacturing: null,
+    domestic_services: null,
+    other_domestic: null,
+    foreign_manufacturing: null,
+    foreign_services: null,
+    other_foreign: null,
+  }
+  if (row < 0) {
+    return { key: economy, label: economyName(data, economy), denominator: null, values: emptyValues, available: false }
+  }
+
+  const values: Record<MainCompositionKey, Numeric> = {
+    domestic_manufacturing: data.country.dva_from.manufacturing[row] ?? null,
+    domestic_services: data.country.dva_from.services[row] ?? null,
+    other_domestic: publishedOtherContent(data, 'dva', 'tax_content_domestic', row),
+    foreign_manufacturing: data.country.fva_from.manufacturing[row] ?? null,
+    foreign_services: data.country.fva_from.services[row] ?? null,
+    other_foreign: publishedOtherContent(data, 'fva', 'tax_content_foreign', row),
+  }
+  const denominator = data.country.mfg_exports[row] ?? null
+  const available =
+    denominator !== null && Number.isFinite(denominator) && denominator > 0 &&
+    Object.values(values).every((value) => value !== null && Number.isFinite(value) && value >= 0)
+  return { key: economy, label: economyName(data, economy), denominator, values, available }
 }
 
 /** Default drill-down industry: motor vehicles, the sector readers arrive with priors about. */
